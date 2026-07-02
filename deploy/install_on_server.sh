@@ -21,6 +21,13 @@ mkdir -p "$INSTALL_DIR"
 chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
 
 echo ">>> clone or pull code"
+# If the repo was cloned by a different user (common when bootstrapping),
+# tell git this checkout is trusted for the service user.
+sudo -u "$SERVICE_USER" git config --global --add safe.directory "$INSTALL_DIR" || true
+# Also ensure catvnc owns the tree — a previous manual clone as another user
+# leaves files with the wrong owner and `git reset --hard` will fail on write.
+chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
+
 if [ -d "$INSTALL_DIR/.git" ]; then
     sudo -u "$SERVICE_USER" git -C "$INSTALL_DIR" fetch --all --prune
     sudo -u "$SERVICE_USER" git -C "$INSTALL_DIR" reset --hard origin/main
