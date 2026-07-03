@@ -1,20 +1,24 @@
 """Root-level HTTP reverse proxy to the active device's CatVNC tunnel.
 
-CatVNC's frontend bundle references assets via absolute paths (/assets/*,
-/detector.js, ...). Rather than rewriting HTML/JS on the fly, we proxy
-everything at root and pick the active device from a cookie (or the sole
-device in M1). WebSocket upgrades on /ws are handled by the signaling router.
+For JavaScript assets we intercept the body and inject TURN servers into the
+hard-coded `iceServers` literal. Everything else streams through untouched.
+WebSocket upgrades on /ws are handled by the signaling router.
 """
 
 from __future__ import annotations
 
+import logging
+
 import httpx
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from catvnc.config import get_settings
 from catvnc.deps import get_active_device
+from catvnc.ice_injector import inject_turn
 from catvnc.models import Device
+
+log = logging.getLogger("catvnc.proxy")
 
 router = APIRouter()
 
@@ -38,7 +42,15 @@ def _filter_headers(headers) -> dict[str, str]:
     return {k: v for k, v in headers.items() if k.lower() not in _HOP_BY_HOP}
 
 
-async def _do_proxy(path: str, request: Request, device: Device) -> StreamingResponse:
+def _is_js(path: str, content_type: str) -> bool:
+    ct = content_type.lower()
+    if "javascript" in ct or ct.startswith("application/x-javascript"):
+        return True
+    # Fallback: path-based (CatVNC serves JS with correct content-type in practice)
+    return path.endswith(".js")
+
+
+async def _do_proxy(path: str, request: Request, device: Device) -> Response | StreamingResponse:
     settings = get_settings()
     upstream_url = f"http://{settings.upstream_host}:{device.tunnel_port}/{path}"
 
@@ -55,6 +67,33 @@ async def _do_proxy(path: str, request: Request, device: Device) -> StreamingRes
     )
     upstream = await _client.send(req, stream=True)
 
+    content_type = upstream.headers.get("content-type", "")
+    if request.method in ("GET",) and _is_js(path, content_type):
+        # Buffer the JS body so we can inject TURN into iceServers.
+        try:
+            body = await upstream.aread()
+        finally:
+            await upstream.aclose()
+
+        try:
+            source = body.decode("utf-8")
+        except UnicodeDecodeError:
+            log.warning("cannot decode JS %s as utf-8, serving raw", path)
+            source = None
+
+        if source is not None:
+            patched, did_replace = inject_turn(source, settings)
+            if did_replace:
+                log.info("injected TURN into %s (delta %+d bytes)", path, len(patched) - len(source))
+            body = patched.encode("utf-8")
+
+        return Response(
+            content=body,
+            status_code=upstream.status_code,
+            headers=_filter_headers(upstream.headers),
+            media_type=content_type or "application/javascript",
+        )
+
     async def stream():
         try:
             async for chunk in upstream.aiter_raw():
@@ -62,12 +101,11 @@ async def _do_proxy(path: str, request: Request, device: Device) -> StreamingRes
         finally:
             await upstream.aclose()
 
-    response_headers = _filter_headers(upstream.headers)
     return StreamingResponse(
         stream(),
         status_code=upstream.status_code,
-        headers=response_headers,
-        media_type=upstream.headers.get("content-type"),
+        headers=_filter_headers(upstream.headers),
+        media_type=content_type or None,
     )
 
 
@@ -79,5 +117,5 @@ async def proxy_http(
     path: str,
     request: Request,
     device: Device = Depends(get_active_device),
-) -> StreamingResponse:
+) -> Response | StreamingResponse:
     return await _do_proxy(path, request, device)

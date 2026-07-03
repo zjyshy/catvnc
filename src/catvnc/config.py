@@ -21,6 +21,10 @@ class Settings(BaseSettings):
 
     turn_host: str = "39.106.125.238"
     turn_port: int = 3478
+    # M1: static credentials (matches existing coturn config).
+    # M2 will switch to short-lived HMAC creds and this pair will be retired.
+    turn_username: str = "catvnc"
+    turn_credential: str = "1q2w3e4r"
     turn_shared_secret: str = "change-me"
     turn_ttl_seconds: int = 300
 
