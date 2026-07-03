@@ -9,7 +9,7 @@ User=catvnc
 Group=catvnc
 WorkingDirectory=/opt/catvnc
 EnvironmentFile=/opt/catvnc/.env
-ExecStart=/opt/catvnc/.venv/bin/uvicorn catvnc.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+ExecStart=/opt/catvnc/.venv/bin/uvicorn catvnc.main:app --host 127.0.0.1 --port 8001 --proxy-headers --forwarded-allow-ips=127.0.0.1
 Restart=on-failure
 RestartSec=3
 LimitNOFILE=65536
