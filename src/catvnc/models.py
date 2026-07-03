@@ -23,6 +23,7 @@ class Device(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(128))
+    agent_token: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True, index=True)
     owner_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,

@@ -54,9 +54,12 @@ if [ ! -f "$INSTALL_DIR/.env" ]; then
 fi
 
 echo ">>> seed the device row (idempotent upsert)"
+# DEVICE_TOKEN must be set in the environment before running this script,
+# or pass it inline: DEVICE_TOKEN=xxx bash install_on_server.sh
+: "${DEVICE_TOKEN:?DEVICE_TOKEN env var is required}"
 sudo -u "$SERVICE_USER" bash -c "cd $INSTALL_DIR && $UV run python scripts/seed_device.py \
     --slug myphone --name 'iPhone 8' \
-    --tunnel-port 15901 --public-ip 123.124.217.250"
+    --tunnel-port 15901 --token '$DEVICE_TOKEN'"
 
 echo ">>> install systemd unit"
 cp "$INSTALL_DIR/deploy/catvnc-backend.service" /etc/systemd/system/catvnc-backend.service

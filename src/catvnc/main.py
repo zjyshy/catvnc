@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
 
 from catvnc.db import Base, engine
-from catvnc.routers import proxy, signaling
+from catvnc.routers import agent, proxy, signaling
 
 
 @asynccontextmanager
@@ -25,6 +25,9 @@ app = FastAPI(title="CatVNC Gateway", lifespan=lifespan)
 async def healthz() -> str:
     return "ok"
 
+
+# Device agent heartbeat — must be before the proxy catch-all.
+app.include_router(agent.router)
 
 # WebSocket route (/ws) — WS and HTTP scopes are separate, but keep it above
 # the catch-all for clarity.
