@@ -29,6 +29,8 @@ sudo -u "$SERVICE_USER" git config --global --add safe.directory "$INSTALL_DIR" 
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
+    # Force HTTPS origin so we don't need GitHub SSH keys as the service user
+    sudo -u "$SERVICE_USER" git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL"
     sudo -u "$SERVICE_USER" git -C "$INSTALL_DIR" fetch --all --prune
     sudo -u "$SERVICE_USER" git -C "$INSTALL_DIR" reset --hard origin/main
 else
