@@ -1,4 +1,4 @@
-"""WebSocket signaling proxy for /d/{slug}/ws.
+"""WebSocket signaling proxy for /ws.
 
 Two-way pipe between the browser and CatVNC's local WS endpoint. On downstream
 messages (CatVNC -> browser) we rewrite any private-network IPv4 literal to
@@ -16,36 +16,38 @@ import logging
 
 import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from sqlalchemy import select
 from starlette.websockets import WebSocketState
 
 from catvnc.config import get_settings
 from catvnc.db import SessionLocal
+from catvnc.deps import get_active_device_for_ws
 from catvnc.ice_rewriter import rewrite_ips_in_text
-from catvnc.models import Device
 
 log = logging.getLogger("catvnc.signaling")
 
 router = APIRouter()
 
 
-@router.websocket("/d/{slug}/ws")
-async def proxy_ws(websocket: WebSocket, slug: str) -> None:
+@router.websocket("/ws")
+async def proxy_ws(websocket: WebSocket) -> None:
     async with SessionLocal() as db:
-        result = await db.execute(select(Device).where(Device.slug == slug))
-        device = result.scalar_one_or_none()
-
-    if device is None:
-        await websocket.close(code=4404, reason=f"device '{slug}' not found")
-        return
+        try:
+            device = await get_active_device_for_ws(websocket.cookies, db)
+        except LookupError as exc:
+            await websocket.close(code=4404, reason=str(exc))
+            return
 
     if not device.public_egress_ip:
         await websocket.close(code=4400, reason="device has no public_egress_ip configured")
         return
 
     settings = get_settings()
+    qs = websocket.url.query
     upstream_url = f"ws://{settings.upstream_host}:{device.tunnel_port}/ws"
+    if qs:
+        upstream_url = f"{upstream_url}?{qs}"
     public_ip = device.public_egress_ip
+    slug = device.slug
 
     await websocket.accept()
 
@@ -77,7 +79,6 @@ async def _pipe_downstream(
                     log.debug("%s: rewrote private IPs in downstream text msg", slug)
                 await browser.send_text(rewritten)
             else:
-                # Binary frames — currently CatVNC signaling is text, but pass through safely
                 await browser.send_bytes(msg)
     except (WebSocketDisconnect, websockets.WebSocketException):
         pass

@@ -17,12 +17,19 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="CatVNC Gateway", lifespan=lifespan)
 
-# WebSocket route must be registered before the HTTP catch-all router,
-# but FastAPI matches WS routes independently of the api_route ones.
-app.include_router(signaling.router)
-app.include_router(proxy.router)
 
+# Route registration order matters: FastAPI matches in declaration order and
+# the proxy is a `/{path:path}` catch-all that would swallow anything below it.
 
 @app.get("/healthz", response_class=PlainTextResponse)
 async def healthz() -> str:
     return "ok"
+
+
+# WebSocket route (/ws) — WS and HTTP scopes are separate, but keep it above
+# the catch-all for clarity.
+app.include_router(signaling.router)
+
+
+# Catch-all HTTP reverse proxy to the active device. MUST BE LAST.
+app.include_router(proxy.router)
