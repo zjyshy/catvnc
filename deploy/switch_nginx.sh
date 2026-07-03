@@ -10,8 +10,10 @@ INSTALL_DIR="/opt/catvnc"
 NGINX_CONF="/etc/nginx/conf.d/catvnc.conf"
 BACKUP="$NGINX_CONF.bak"
 
-echo ">>> pre-flight: backend must be healthy"
-curl -sf http://127.0.0.1:8000/healthz >/dev/null || { echo "backend not responding on :8000, aborting"; exit 1; }
+BACKEND_PORT="${BACKEND_PORT:-8001}"
+
+echo ">>> pre-flight: backend must be healthy on :$BACKEND_PORT"
+curl -sf "http://127.0.0.1:$BACKEND_PORT/healthz" >/dev/null || { echo "backend not responding on :$BACKEND_PORT, aborting"; exit 1; }
 
 if [ ! -f "$BACKUP" ]; then
     echo ">>> backing up current nginx config -> $BACKUP"
@@ -34,6 +36,6 @@ sleep 1
 curl -sfI http://127.0.0.1:18888/d/myphone/ | head -1 || true
 
 echo
-echo ">>> nginx now proxies 18888 -> 127.0.0.1:8000 (Python backend)"
+echo ">>> nginx now proxies 18888 -> 127.0.0.1:$BACKEND_PORT (Python backend)"
 echo ">>> Test in a browser:  http://39.106.125.238:18888/d/myphone/"
 echo ">>> Rollback if screen breaks:  bash deploy/rollback_nginx.sh"
