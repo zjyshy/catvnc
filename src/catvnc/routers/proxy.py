@@ -112,6 +112,7 @@ async def _do_proxy(path: str, request: Request, device: Device) -> Response | S
 @router.api_route(
     "/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    response_model=None,
 )
 async def proxy_http(
     path: str,
