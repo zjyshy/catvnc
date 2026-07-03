@@ -4,7 +4,7 @@
 # reverse tunnel. Restarts automatically on disconnect.
 
 SERVER="39.106.125.238"
-BACKEND_URL="http://${SERVER}:8001"
+BACKEND_URL="http://${SERVER}:18888"
 DEVICE_SLUG="iphone8"
 DEVICE_TOKEN="REPLACE_WITH_AGENT_TOKEN"
 TUNNEL_PORT="15901"
